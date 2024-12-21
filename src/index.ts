@@ -1,32 +1,20 @@
-import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
-import { StorageService, storageService } from "./services/StorageService";
-import { I18N } from "./types/i18n";
 import $, { Cash } from "cash-dom";
 import {
   Plugin,
-  showMessage,
-  confirm,
-  Dialog,
   Menu,
   openTab,
-  adaptHotkey,
-  getFrontend,
-  getBackend,
   IModel,
-  Protyle,
   openWindow,
-  IOperation,
-  Constants,
   openMobileFileById,
   lockScreen,
-  ICard,
-  ICardData,
   App,
   EventMenu,
   IMenuItemOption,
 } from "siyuan";
-import "@/index.scss";
-
+import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
+import UnlockNotebookDialog from "@/components/UnlockNotebookDialog.svelte";
+import { StorageService, storageService } from "./services/StorageService";
+import { I18N } from "./types/i18n";
 import { SettingUtils } from "./libs/setting-utils";
 import { Logger } from "./libs/logger";
 import { SecuredNotesStorage } from "./types/SecuredNotesStorage";
@@ -35,9 +23,10 @@ import { LockNotebookService } from "./services/LockNotebookService";
 import { OpenMenuDocTreeEvent, SiyuanEvents } from "./types/SiyuanEvents";
 import { isMobile } from "./utils/isMobile";
 import { createFormDialog } from "./components/FormDialog";
-import { IFormItemConfig } from "./types/FormItem";
 import { OverlayPosition } from "./services/OverlayInterceptor";
 import { svelteDialog } from "./libs/dialog";
+import "@/index.scss";
+import { removeRefIgnore, removeSearchIgnore } from "./api/searchIgnore";
 
 const SECURED_NOTES_STORAGE = "secured-notes";
 const GLOBAL_LOCK_STATE = "lock-state";
@@ -131,11 +120,97 @@ export default class SecureNotesPlugin extends Plugin {
     Logger.debug("OPEN_MENU_DOCTREE dataId", dataId);
 
     if (this.isNotebookLocked(dataId)) {
-      LockNotebookService.handleLockedNotebookMenu($element, dataId, detail);
+      this.handleLockedNotebookMenu($element, dataId, detail);
       return;
     }
 
     this.addNotebookUnlockedContextMenu(dataId, event);
+  }
+
+  handleLockedNotebookMenu(
+    $element: Cash,
+    dataId: string,
+    detail: {
+      menu: EventMenu;
+      elements: NodeListOf<HTMLElement>;
+      type: "doc" | "docs" | "notebook";
+    }
+  ) {
+    // Lock Notebook
+    detail.menu.addItem({
+      iconHTML: "",
+      label: this.i18n.secureNotes,
+      click: () => {
+        LockNotebookService.createLockOverlay(
+          $element.parent(),
+          dataId,
+          OverlayPosition.Directory
+        );
+        LockNotebookService.lockNotebookTabs(dataId);
+      },
+    });
+
+    // Remove Password
+    detail.menu.addItem({
+      iconHTML: "",
+      label: this.i18n.removeLock,
+      click: () => {
+        const dialog = svelteDialog({
+          title: this.I18N.removeLock,
+          width: this.isMobile ? "92vw" : "720px",
+          constructor: (container: HTMLElement) => {
+            return new UnlockNotebookDialog({
+              target: container,
+              props: {
+                i18n: this.I18N,
+                currentPassword: this.data[SECURED_NOTES_STORAGE][dataId],
+                onClose: () => {
+                  dialog.close();
+                },
+                onSuccess: () => {
+                  delete this.data[SECURED_NOTES_STORAGE][dataId];
+                  this.saveData(
+                    SECURED_NOTES_STORAGE,
+                    this.data[SECURED_NOTES_STORAGE]
+                  );
+                  removeRefIgnore(dataId);
+                  removeSearchIgnore(dataId);
+
+                  dialog.close();
+                },
+              },
+            });
+          },
+        });
+
+        const { formInstance: form, formDialog } = createFormDialog(
+          this.i18n.enterPasswordLabel
+        );
+        form.formItemConfigs = [
+          {
+            ...this.passwordField,
+            eventList: [
+              {
+                event: "keydown",
+                handler: (e: KeyboardEvent) => {
+                  if (e.key === "Enter") {
+                    const password = this.lockedNotes[dataId];
+                    if (password === form.formElements[0].value.password) {
+                      delete this.lockedNotes[dataId];
+                      this.saveData(this.lockedNotes);
+                      removeRefIgnore(dataId);
+                      removeSearchIgnore(dataId);
+                      formDialog.destroy();
+                    }
+                  }
+                },
+              },
+            ],
+          },
+        ];
+      },
+    });
+    return;
   }
 
   addNotebookUnlockedContextMenu(dataId: string, event: OpenMenuDocTreeEvent) {
