@@ -78,7 +78,6 @@ export default class SecureNotesPlugin extends Plugin {
     );
 
     this.eventBus.on("ws-main", (event) => NoteBookLocker.onWSMain(event));
-
   }
 
   uninstall(): void {

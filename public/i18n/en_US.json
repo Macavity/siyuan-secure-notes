@@ -1,5 +1,15 @@
 {
+    "secureNotes": "Secure Notes",
     "topBarIconTooltip": "Unlock Secured Notes",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "setPasswordMenuItem": "Set password for note",
+    "enterPasswordLabel": "Please enter password",
+    "repeatPasswordLabel": "Please enter password again",
+    "repeatPasswordNotMatching": "The two passwords entered do not match",
+    "password": "Password",
+    "passwordWrong": "Password error",
+    "confirmPassword": "Confirm password",
+    "lockNotebook": "Lock note",
+    "removeLock": "Remove note password"
 }
