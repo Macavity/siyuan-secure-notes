@@ -1,3 +1,4 @@
+import { StorageService, storageService } from "./services/StorageService";
 import { I18N } from "./types/i18n";
 import {
   Plugin,
@@ -18,6 +19,7 @@ import {
   lockScreen,
   ICard,
   ICardData,
+  App,
 } from "siyuan";
 import "@/index.scss";
 
@@ -26,14 +28,24 @@ import HelloExample from "@/hello.svelte";
 import { SettingUtils } from "./libs/setting-utils";
 import { svelteDialog } from "./libs/dialog";
 import { Logger } from "./libs/logger";
+import { SecuredNotesStorage } from "./types/SecuredNotesStorage";
+import { LockState } from "./types/LockState";
 
-const STORAGE_NAME = "plugin-secure-notes";
+const SECURED_NOTES_STORAGE = "secured-notes";
+const GLOBAL_LOCK_STATE = "lock-state";
 const TAB_TYPE = "custom_tab";
 
 export default class SecureNotesPlugin extends Plugin {
   customTab: () => IModel;
   private isMobile: boolean;
   private settingUtils: SettingUtils;
+  private storageService: StorageService;
+
+  constructor(options: { app: App; name: string; i18n: I18N }) {
+    super(options);
+
+    this.storageService = storageService;
+  }
 
   get I18N(): I18N {
     return this.i18n as I18N;
@@ -43,48 +55,48 @@ export default class SecureNotesPlugin extends Plugin {
     const frontEnd = getFrontend();
     this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
 
-    this.data[STORAGE_NAME] = { lockState: "locked" };
-
     Logger.info(`Secure Notes Plugin: v${process.env.PLUGIN_VERSION}`);
 
+    this.initStorage();
     this.initSettings();
+    console.log("settings loaded");
     this.initTopBarIcon();
   }
 
   onLayoutReady() {
-    // this.loadData(STORAGE_NAME);
     this.settingUtils.load();
-    console.log(`frontend: ${getFrontend()}; backend: ${getBackend()}`);
 
-    console.log(
-      "Official settings value calling example:\n" +
-        this.settingUtils.get("InputArea") +
-        "\n" +
-        this.settingUtils.get("Slider") +
-        "\n" +
-        this.settingUtils.get("Select") +
-        "\n"
+    this.eventBus.on("open-menu-doctree", (event) =>
+      NoteBookLocker.onOpenMenuDocTree(event)
     );
 
-    let tabDiv = document.createElement("div");
-    new HelloExample({
-      target: tabDiv,
-      props: {
-        app: this.app,
-      },
+    this.eventBus.on("open-menu-content", (event) =>
+      NoteBookLocker.showContentMenu(event)
+    );
+    this.eventBus.on("click-blockicon", (event) =>
+      NoteBookLocker.showContentMenu(event as any)
+    );
+
+    this.eventBus.on("ws-main", (event) => NoteBookLocker.onWSMain(event));
+
+  }
+
+  uninstall(): void {
+    this.removeData(SECURED_NOTES_STORAGE);
+    this.removeData(GLOBAL_LOCK_STATE);
+  }
+
+  initStorage() {
+    this.data[SECURED_NOTES_STORAGE] = {} as SecuredNotesStorage;
+    this.data[GLOBAL_LOCK_STATE] = LockState.LOCKED;
+
+    this.loadData(SECURED_NOTES_STORAGE).then((data: SecuredNotesStorage) => {
+      this.storageService.setSecuredNotesStorage(data);
+      Logger.debug("Secured notes storage loaded", data);
     });
-    this.customTab = this.addTab({
-      type: TAB_TYPE,
-      init() {
-        this.element.appendChild(tabDiv);
-        console.log(this.element);
-      },
-      beforeDestroy() {
-        console.log("before destroy tab:", TAB_TYPE);
-      },
-      destroy() {
-        console.log("destroy tab:", TAB_TYPE);
-      },
+    this.loadData(GLOBAL_LOCK_STATE).then((data: LockState) => {
+      this.storageService.setLockState(data);
+      Logger.debug("Global lock state loaded", data);
     });
   }
 
@@ -116,7 +128,6 @@ export default class SecureNotesPlugin extends Plugin {
   initSettings() {
     this.settingUtils = new SettingUtils({
       plugin: this,
-      name: STORAGE_NAME,
     });
 
     // this.settingUtils.addItem({
