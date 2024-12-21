@@ -1,14 +1,14 @@
-export interface IEventConfig {
-  event: string;
-  handler: (e: any) => void;
-}
+import $, { Cash } from "cash-dom";
+import { IEventConfig } from "./FormItem";
 
+// Mask
 export class Mask {
-  overlayElement: HTMLElement = document.createElement("div");
+  parentElement: Cash;
+  Mask: Cash = $(document.createElement("div"));
   eventConfigurations: IEventConfig[];
 
   constructor(
-    public container: HTMLElement,
+    parentElement: Cash,
     option?: {
       eventConfigurations?: IEventConfig[];
       style?: Partial<CSSStyleDeclaration>;
@@ -16,12 +16,12 @@ export class Mask {
     }
   ) {
     const { eventConfigurations, style } = option ?? {};
-    this.container = container;
-    this.container.css("position", "relative");
+    this.parentElement = parentElement;
+    this.parentElement.css("position", "relative");
 
-    this.container.append(this.overlayElement);
+    this.parentElement.append(this.Mask);
 
-    this.overlayElement.style({
+    this.Mask.css({
       backdropFilter: "blur(5px)",
       zIndex: "1",
       ...style,
@@ -35,18 +35,18 @@ export class Mask {
 
     eventConfigurations &&
       eventConfigurations.forEach((item) => {
-        this.overlayElement.on(item.event, item.handler);
+        this.Mask.on(item.event, item.handler);
       });
 
     // 添加data
-    this.overlayElement.data(option?.data);
+    this.Mask.data(option?.data);
   }
 
   on(event: HTMLElementEventMap | string, handler: (e: Event) => void) {
-    this.overlayElement.on(event as any, handler);
+    this.Mask.on(event as any, handler);
   }
 
   destroy() {
-    this.overlayElement.remove();
+    this.Mask.remove();
   }
 }

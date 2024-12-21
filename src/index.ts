@@ -1,5 +1,7 @@
+import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
 import { StorageService, storageService } from "./services/StorageService";
 import { I18N } from "./types/i18n";
+import $, { Cash } from "cash-dom";
 import {
   Plugin,
   showMessage,
@@ -20,16 +22,22 @@ import {
   ICard,
   ICardData,
   App,
+  EventMenu,
+  IMenuItemOption,
 } from "siyuan";
 import "@/index.scss";
 
-import HelloExample from "@/hello.svelte";
-
 import { SettingUtils } from "./libs/setting-utils";
-import { svelteDialog } from "./libs/dialog";
 import { Logger } from "./libs/logger";
 import { SecuredNotesStorage } from "./types/SecuredNotesStorage";
 import { LockState } from "./types/LockState";
+import { LockNotebookService } from "./services/LockNotebookService";
+import { OpenMenuDocTreeEvent, SiyuanEvents } from "./types/SiyuanEvents";
+import { isMobile } from "./utils/isMobile";
+import { createFormDialog } from "./components/FormDialog";
+import { IFormItemConfig } from "./types/FormItem";
+import { OverlayPosition } from "./services/OverlayInterceptor";
+import { svelteDialog } from "./libs/dialog";
 
 const SECURED_NOTES_STORAGE = "secured-notes";
 const GLOBAL_LOCK_STATE = "lock-state";
@@ -52,32 +60,118 @@ export default class SecureNotesPlugin extends Plugin {
   }
 
   async onload() {
-    const frontEnd = getFrontend();
-    this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile";
+    this.isMobile = isMobile();
+
+    // TODO Clarify
+    if (this.isMobile) {
+      return;
+    }
 
     Logger.info(`Secure Notes Plugin: v${process.env.PLUGIN_VERSION}`);
 
     this.initStorage();
     this.initSettings();
-    console.log("settings loaded");
     this.initTopBarIcon();
+
+    const getData = async () => {
+      let data;
+      try {
+        data = await this.loadData(SECURED_NOTES_STORAGE);
+      } catch (error) {
+        console.log("🚀 ~ AccessControllerPlugin ~ getData ~ error:", error);
+        return null;
+      }
+      return data;
+    };
+
+    const saveData = async (value: any) => {
+      try {
+        await this.saveData(SECURED_NOTES_STORAGE, value);
+      } catch (error) {
+        console.log("🚀 ~ AccessControllerPlugin ~ saveData ~ error:", error);
+      }
+    };
+
+    LockNotebookService.onLoad(getData, saveData, this.I18N);
   }
 
   onLayoutReady() {
+    // TODO Clarify
+    if (this.isMobile) {
+      return;
+    }
+
     this.settingUtils.load();
+    LockNotebookService.onLayoutReady();
 
-    this.eventBus.on("open-menu-doctree", (event) =>
-      NoteBookLocker.onOpenMenuDocTree(event)
+    this.eventBus.on(
+      SiyuanEvents.OPEN_MENU_DOCTREE,
+      this.onOpenMenuDocTree.bind(this)
     );
 
-    this.eventBus.on("open-menu-content", (event) =>
-      NoteBookLocker.showContentMenu(event)
+    this.eventBus.on(SiyuanEvents.OPEN_MENU_CONTENT, (event) =>
+      LockNotebookService.showContentMenu(event)
     );
-    this.eventBus.on("click-blockicon", (event) =>
-      NoteBookLocker.showContentMenu(event as any)
+    this.eventBus.on(SiyuanEvents.CLICK_BLOCKICON, (event) =>
+      LockNotebookService.showContentMenu(event as any)
     );
 
-    this.eventBus.on("ws-main", (event) => NoteBookLocker.onWSMain(event));
+    this.eventBus.on(SiyuanEvents.WS_MAIN, (event) =>
+      LockNotebookService.onWSMain(event)
+    );
+  }
+
+  onOpenMenuDocTree(event: OpenMenuDocTreeEvent) {
+    const detail = event.detail;
+    const $element = $(event.detail.elements[0]);
+    const type = detail.type;
+    if (type !== "notebook") return;
+
+    const dataId = $element.parent().data("url") || $element.data("nodeId");
+    Logger.debug("OPEN_MENU_DOCTREE dataId", dataId);
+
+    if (this.isNotebookLocked(dataId)) {
+      LockNotebookService.handleLockedNotebookMenu($element, dataId, detail);
+      return;
+    }
+
+    this.addNotebookUnlockedContextMenu(dataId, event);
+  }
+
+  addNotebookUnlockedContextMenu(dataId: string, event: OpenMenuDocTreeEvent) {
+    const setPasswordMenuItem: IMenuItemOption = {
+      iconHTML: "",
+      label: this.i18n.setPasswordMenuItem,
+      click: () => {
+        const dialog = svelteDialog({
+          title: this.I18N.setPasswordMenuItem,
+          width: this.isMobile ? "92vw" : "720px",
+          constructor: (container: HTMLElement) => {
+            return new SetPasswordFormDialog({
+              target: container,
+              props: {
+                i18n: this.I18N,
+                onClose: () => {
+                  dialog.close();
+                },
+                onSave: (password: string) => {
+                  Logger.debug(`Lock note ${dataId} with password`);
+                  this.data[SECURED_NOTES_STORAGE][dataId] = password;
+                  this.saveData(
+                    SECURED_NOTES_STORAGE,
+                    this.data[SECURED_NOTES_STORAGE]
+                  );
+
+                  dialog.close();
+                },
+              },
+            });
+          },
+        });
+      },
+    };
+
+    event.detail.menu.addItem(setPasswordMenuItem);
   }
 
   uninstall(): void {
@@ -90,7 +184,7 @@ export default class SecureNotesPlugin extends Plugin {
     this.data[GLOBAL_LOCK_STATE] = LockState.LOCKED;
 
     this.loadData(SECURED_NOTES_STORAGE).then((data: SecuredNotesStorage) => {
-      this.storageService.setSecuredNotesStorage(data);
+      this.storageService.setSecuredNotes(data);
       Logger.debug("Secured notes storage loaded", data);
     });
     this.loadData(GLOBAL_LOCK_STATE).then((data: LockState) => {
@@ -100,7 +194,7 @@ export default class SecureNotesPlugin extends Plugin {
   }
 
   initTopBarIcon() {
-    this.addTopBar({
+    const topBarElement = this.addTopBar({
       icon: "iconLock",
       title: this.I18N.topBarIconTooltip,
       position: "right",
@@ -269,35 +363,6 @@ export default class SecureNotesPlugin extends Plugin {
     Logger.debug(detail);
   }
 
-  private showDialog() {
-    // let dialog = new Dialog({
-    //     title: `SiYuan ${Constants.SIYUAN_VERSION}`,
-    //     content: `<div id="helloPanel" class="b3-dialog__content"></div>`,
-    //     width: this.isMobile ? "92vw" : "720px",
-    //     destroyCallback() {
-    //         // hello.$destroy();
-    //     },
-    // });
-    // new HelloExample({
-    //     target: dialog.element.querySelector("#helloPanel"),
-    //     props: {
-    //         app: this.app,
-    //     }
-    // });
-    svelteDialog({
-      title: `SiYuan ${Constants.SIYUAN_VERSION}`,
-      width: this.isMobile ? "92vw" : "720px",
-      constructor: (container: HTMLElement) => {
-        return new HelloExample({
-          target: container,
-          props: {
-            app: this.app,
-          },
-        });
-      },
-    });
-  }
-
   private addMenu(rect?: DOMRect) {
     const menu = new Menu("topBarSample", () => {
       // on close
@@ -308,7 +373,7 @@ export default class SecureNotesPlugin extends Plugin {
       label: "Dialog(open help first)",
       accelerator: this.commands[0].customHotkey,
       click: () => {
-        this.showDialog();
+        // this.showDialog();
       },
     });
     if (!this.isMobile) {
@@ -436,20 +501,6 @@ export default class SecureNotesPlugin extends Plugin {
           label: "Off ws-main",
           click: () => {
             this.eventBus.off("ws-main", this.eventBusLog);
-          },
-        },
-        {
-          icon: "iconSelect",
-          label: "On click-blockicon",
-          click: () => {
-            this.eventBus.on("click-blockicon", this.blockIconEventBindThis);
-          },
-        },
-        {
-          icon: "iconClose",
-          label: "Off click-blockicon",
-          click: () => {
-            this.eventBus.off("click-blockicon", this.blockIconEventBindThis);
           },
         },
         {
@@ -734,20 +785,6 @@ export default class SecureNotesPlugin extends Plugin {
         },
         {
           icon: "iconSelect",
-          label: "On paste",
-          click: () => {
-            this.eventBus.on("paste", this.eventBusPaste);
-          },
-        },
-        {
-          icon: "iconClose",
-          label: "Off paste",
-          click: () => {
-            this.eventBus.off("paste", this.eventBusPaste);
-          },
-        },
-        {
-          icon: "iconSelect",
           label: "On open-siyuan-url-plugin",
           click: () => {
             this.eventBus.on("open-siyuan-url-plugin", this.eventBusLog);
@@ -784,11 +821,7 @@ export default class SecureNotesPlugin extends Plugin {
         this.openSetting();
       },
     });
-    menu.addItem({
-      icon: "iconSparkles",
-      label: this.data[STORAGE_NAME].readonlyText || "Readonly",
-      type: "readonly",
-    });
+
     if (this.isMobile) {
       menu.fullscreen();
     } else {
@@ -798,5 +831,15 @@ export default class SecureNotesPlugin extends Plugin {
         isLeft: true,
       });
     }
+  }
+
+  private isNotebookLocked(notebookId: string) {
+    if (!notebookId) return false;
+    Logger.debug(
+      "isNotebookLocked",
+      notebookId,
+      this.data[SECURED_NOTES_STORAGE]
+    );
+    return this.data[SECURED_NOTES_STORAGE][notebookId] !== undefined;
   }
 }
