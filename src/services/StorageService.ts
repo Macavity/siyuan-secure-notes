@@ -1,9 +1,13 @@
+import { Logger } from "@/libs/logger";
 import { LockState } from "@/types/LockState";
 import { SecuredNotesStorage } from "@/types/SecuredNotesStorage";
 
+type GetDataFunction = <T>() => Promise<T>;
+type SaveDataFunction = (value: any) => Promise<void>;
+
 export class StorageService {
   private static instance: StorageService;
-  private securedNotesStorage: SecuredNotesStorage = {};
+  private securedNotes: SecuredNotesStorage = {};
   private lockState: LockState = LockState.LOCKED;
 
   private constructor() {}
@@ -15,12 +19,13 @@ export class StorageService {
     return StorageService.instance;
   }
 
-  public getSecuredNotesStorage(): SecuredNotesStorage {
-    return this.securedNotesStorage;
+  public getSecuredNotes(): SecuredNotesStorage {
+    return this.securedNotes;
   }
 
-  public setSecuredNotesStorage(data: SecuredNotesStorage): void {
-    this.securedNotesStorage = data;
+  public setSecuredNotes(data: SecuredNotesStorage): void {
+    Logger.log("setSecuredNotesStorage", data);
+    this.securedNotes = data;
   }
 
   public getLockState(): LockState {
