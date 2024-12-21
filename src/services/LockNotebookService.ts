@@ -1,12 +1,5 @@
 import $, { Cash } from "cash-dom";
-import {
-  EventMenu,
-  IMenuBaseDetail,
-  IMenuItemOption,
-  IWebSocketData,
-} from "siyuan";
-import { createFormDialog } from "../components/FormDialog";
-import { IFormItemConfig } from "@/types/FormItem";
+import { IMenuBaseDetail, IWebSocketData } from "siyuan";
 import { sleep } from "@/utils/sleep";
 import { Logger } from "@/libs/logger";
 import { I18N } from "@/types/i18n";
@@ -14,11 +7,8 @@ import {
   NotebookLockedClass,
   OverlayInterceptor,
   OverlayPosition,
-  TOverlayPosition,
 } from "./OverlayInterceptor";
-import { removeRefIgnore, removeSearchIgnore } from "@/api/searchIgnore";
 import { likeQuery } from "@/api/SQL";
-import { OpenMenuDocTreeEvent } from "@/types/SiyuanEvents";
 
 const currentActiveEditorSelector =
   ".layout-tab-container .protyle:not(.fn__none)";
@@ -27,8 +17,6 @@ const editorContentSelector = ".protyle-wysiwyg.protyle-wysiwyg--attr";
 export class LockNotebookService {
   static i18n: I18N;
 
-  static passwordField: IFormItemConfig;
-  static confirmPasswordField: IFormItemConfig;
   static lockedNotes: {
     [key: string]: string;
   } = {};
@@ -46,22 +34,6 @@ export class LockNotebookService {
     this.getData = getData;
     this.saveData = saveData;
 
-    this.passwordField = {
-      fieldName: "password",
-      fieldType: "password",
-      label: i18n.password,
-      tip: i18n.enterPasswordLabel,
-      placeholder: i18n.enterPasswordLabel,
-    };
-
-    this.confirmPasswordField = {
-      fieldName: "confirmPassword",
-      fieldType: "password",
-      label: i18n.confirmPassword,
-      tip: i18n.repeatPasswordLabel,
-      placeholder: i18n.repeatPasswordLabel,
-    };
-
     this.getData().then((data: any) => {
       this.lockedNotes = data;
     });
@@ -71,128 +43,7 @@ export class LockNotebookService {
     this.traverseAndLockNotes();
   }
 
-  static onOpenMenuDocTree(event: OpenMenuDocTreeEvent) {
-    Logger.info("onOpenMenuDocTree", event);
-    const detail = event.detail;
-    const $element = $(event.detail.elements[0]);
-    const type = detail.type;
-    if (type !== "notebook") return;
-
-    const dataId = $element.parent().data("url") || $element.data("nodeId");
-
-    if (this.isNotebookLocked(dataId)) {
-      this.handleLockedNotebookMenu($element, dataId, detail);
-      return;
-    }
-
-    Logger.info("Notebook not locked.");
-    const setPasswordMenuItem: IMenuItemOption = {
-      iconHTML: "",
-      label: this.i18n.setPasswordMenuItem,
-      click: () => {
-        const { formInstance: form, formDialog } = createFormDialog(
-          this.i18n.setPasswordMenuItem
-        );
-        const KeyDownEvent = {
-          event: "keydown",
-          handler: (e: KeyboardEvent) => {
-            if (e.key === "Enter") {
-              const password = form.formElements[0].value.password as string;
-              const confirmPassword =
-                form.formElements[1].value.confirmPassword;
-
-              if (password !== confirmPassword) {
-                form.formElements[1].input.val("");
-                form.formElements[1].tip.text(
-                  this.i18n.repeatPasswordNotMatching
-                );
-              } else {
-                this.lockedNotes[dataId] = password;
-                this.saveData(this.lockedNotes);
-
-                this.createLockOverlay(
-                  $element.parent(),
-                  dataId,
-                  OverlayPosition.Directory
-                );
-                this.lockNotebookTabs(dataId);
-                formDialog.destroy();
-              }
-            }
-          },
-        };
-        form.formItemConfigs = [
-          this.passwordField,
-          {
-            ...this.confirmPasswordField,
-            eventList: [KeyDownEvent],
-          },
-        ];
-      },
-    };
-
-    event.detail.menu.addItem(setPasswordMenuItem);
-  }
-
-  static handleLockedNotebookMenu(
-    $element: Cash,
-    dataId: string,
-    detail: {
-      menu: EventMenu;
-      elements: NodeListOf<HTMLElement>;
-      type: "doc" | "docs" | "notebook";
-    }
-  ) {
-    Logger.info("notebook is locked");
-    detail.menu.addItem({
-      iconHTML: "",
-      label: this.i18n.secureNotes,
-      click: () => {
-        this.createLockOverlay(
-          $element.parent(),
-          dataId,
-          OverlayPosition.Directory
-        );
-        this.lockNotebookTabs(dataId);
-      },
-    });
-
-    detail.menu.addItem({
-      iconHTML: "",
-      label: this.i18n.removeLock,
-      click: () => {
-        const { formInstance: form, formDialog } = createFormDialog(
-          this.i18n.enterPasswordLabel
-        );
-        form.formItemConfigs = [
-          {
-            ...this.passwordField,
-            eventList: [
-              {
-                event: "keydown",
-                handler: (e: KeyboardEvent) => {
-                  if (e.key === "Enter") {
-                    const password = this.lockedNotes[dataId];
-                    if (password === form.formElements[0].value.password) {
-                      delete this.lockedNotes[dataId];
-                      this.saveData(this.lockedNotes);
-                      removeRefIgnore(dataId);
-                      removeSearchIgnore(dataId);
-                      formDialog.destroy();
-                    }
-                  }
-                },
-              },
-            ],
-          },
-        ];
-      },
-    });
-    return;
-  }
-
   static async showContentMenu(event: CustomEvent<IMenuBaseDetail>) {
-    Logger.log("showContentMenu", event);
     const detail = event.detail;
 
     const currentEditorPrimaryNote = $(currentActiveEditorSelector)
@@ -278,11 +129,15 @@ export class LockNotebookService {
     ).then(({ data }) => {
       // BUG: Sometimes you can't get the notebook id of the current tab.
       const currentTabNotebookId = data?.[0]?.box;
+      Logger.debug(
+        "traverseAndLockTabs - currentTabNotebookId",
+        currentTabNotebookId
+      );
 
       const tabEntries: {
         tabElement: Cash;
         id: string;
-        overlayPosition: TOverlayPosition;
+        overlayPosition: OverlayPosition;
       }[] = [];
 
       openTabs.each((_index, tabElement) => {
@@ -331,17 +186,26 @@ export class LockNotebookService {
   static createLockOverlay(
     containerElement: Cash,
     currentNotebookId: string,
-    overlayPosition: TOverlayPosition
+    overlayPosition: OverlayPosition
   ) {
     if (containerElement.hasClass(NotebookLockedClass)) return;
 
+    console.log(
+      "createLockOverlay",
+      containerElement,
+      currentNotebookId,
+      overlayPosition
+    );
+
     containerElement.addClass(NotebookLockedClass);
-    new OverlayInterceptor($(containerElement), {
-      i18n: this.i18n,
-      lockedNoteData: this.lockedNotes,
-      currentNotebookId: currentNotebookId,
-      overlayPosition: overlayPosition,
-    });
+
+    new OverlayInterceptor(
+      $(containerElement),
+      this.i18n,
+      this.lockedNotes,
+      currentNotebookId,
+      overlayPosition
+    );
   }
 
   private static isNotebookLocked(notebookId: string) {

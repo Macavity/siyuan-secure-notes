@@ -1,7 +1,10 @@
 import $, { Cash } from "cash-dom";
-import { IEventConfig } from "./FormItem";
 
-// Mask
+export interface IEventConfig {
+  event: string;
+  handler: (e: any) => void;
+}
+
 export class Mask {
   parentElement: Cash;
   Mask: Cash = $(document.createElement("div"));
@@ -38,7 +41,7 @@ export class Mask {
         this.Mask.on(item.event, item.handler);
       });
 
-    // 添加data
+    console.log("Set Mask.data", option?.data);
     this.Mask.data(option?.data);
   }
 

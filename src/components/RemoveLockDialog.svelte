@@ -34,7 +34,7 @@
   <div class="b3-dialog__content">
     <div class="fn__flex b3-label config__item">
       <div class="fn__size200">
-        {i18n.password}
+        {i18n.confirmPassword}
       </div>
       <span class="fn__space"></span>
       <div class="fn_size200">
@@ -44,7 +44,7 @@
           class:fn__size200={true}
           type="password"
           name="confirmPassword"
-          placeholder={i18n.enterPasswordLabel}
+          placeholder={i18n.repeatPasswordLabel}
           bind:value={confirmPassword}
           on:keydown={onKeyDown}
         />
@@ -63,7 +63,7 @@
     </button>
     <div class="fn__space"></div>
     <button class="b3-button b3-button--text" {disabled} on:click={submitForm}>
-      {i18n.unlock}
+      {i18n.removeLock}
     </button>
   </div>
 </div>

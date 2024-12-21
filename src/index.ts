@@ -12,7 +12,7 @@ import {
   IMenuItemOption,
 } from "siyuan";
 import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
-import UnlockNotebookDialog from "@/components/UnlockNotebookDialog.svelte";
+import UnlockNotebookDialog from "@/components/RemoveLockDialog.svelte";
 import { StorageService, storageService } from "./services/StorageService";
 import { I18N } from "./types/i18n";
 import { SettingUtils } from "./libs/setting-utils";
@@ -22,7 +22,6 @@ import { LockState } from "./types/LockState";
 import { LockNotebookService } from "./services/LockNotebookService";
 import { OpenMenuDocTreeEvent, SiyuanEvents } from "./types/SiyuanEvents";
 import { isMobile } from "./utils/isMobile";
-import { createFormDialog } from "./components/FormDialog";
 import { OverlayPosition } from "./services/OverlayInterceptor";
 import { svelteDialog } from "./libs/dialog";
 import "@/index.scss";
@@ -182,32 +181,6 @@ export default class SecureNotesPlugin extends Plugin {
             });
           },
         });
-
-        const { formInstance: form, formDialog } = createFormDialog(
-          this.i18n.enterPasswordLabel
-        );
-        form.formItemConfigs = [
-          {
-            ...this.passwordField,
-            eventList: [
-              {
-                event: "keydown",
-                handler: (e: KeyboardEvent) => {
-                  if (e.key === "Enter") {
-                    const password = this.lockedNotes[dataId];
-                    if (password === form.formElements[0].value.password) {
-                      delete this.lockedNotes[dataId];
-                      this.saveData(this.lockedNotes);
-                      removeRefIgnore(dataId);
-                      removeSearchIgnore(dataId);
-                      formDialog.destroy();
-                    }
-                  }
-                },
-              },
-            ],
-          },
-        ];
       },
     });
     return;
