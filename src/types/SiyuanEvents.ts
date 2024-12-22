@@ -27,9 +27,3 @@ export enum SiyuanEvents {
   OPEN_SIYUAN_URL_PLUGIN = "open-siyuan-url-plugin",
   OPEN_SIYUAN_URL_BLOCK = "open-siyuan-url-block",
 }
-
-export type OpenMenuDocTreeEvent = CustomEvent<{
-  menu: EventMenu;
-  elements: NodeListOf<HTMLElement>;
-  type: "doc" | "docs" | "notebook";
-}>;

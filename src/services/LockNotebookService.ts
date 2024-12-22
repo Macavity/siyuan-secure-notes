@@ -1,3 +1,4 @@
+import { StorageService, storageService } from "./StorageService";
 import $, { Cash } from "cash-dom";
 import { IMenuBaseDetail, IWebSocketData } from "siyuan";
 import { sleep } from "@/utils/sleep";
@@ -17,26 +18,10 @@ const editorContentSelector = ".protyle-wysiwyg.protyle-wysiwyg--attr";
 export class LockNotebookService {
   static i18n: I18N;
 
-  static lockedNotes: {
-    [key: string]: string;
-  } = {};
+  constructor() {}
 
-  static getData: () => Promise<any>;
-  static saveData: (value: any) => Promise<void>;
-
-  //#region 生命周期
-  static onLoad(
-    getData: () => Promise<any>,
-    saveData: (value: any) => Promise<void>,
-    i18n: any
-  ) {
+  static onLoad(i18n: any) {
     this.i18n = i18n;
-    this.getData = getData;
-    this.saveData = saveData;
-
-    this.getData().then((data: any) => {
-      this.lockedNotes = data;
-    });
   }
 
   static onLayoutReady() {
@@ -74,20 +59,7 @@ export class LockNotebookService {
     });
   }
 
-  // TODO Clarify when this is called
-  static async onWSMain(event: CustomEvent<IWebSocketData>) {
-    if (event.detail?.data?.box) {
-      Logger.debug("onWSMain", event.detail);
-      const isNotebookOpen = event.detail?.data?.existed === false;
-      const isDocumentCreateOrRename = Boolean(event.detail?.data?.id);
-
-      if (isNotebookOpen || isDocumentCreateOrRename) return "不上锁";
-      await sleep(100);
-      this.traverseAndLockNotes();
-    }
-  }
-
-  private static traverseAndLockNotes() {
+  static traverseAndLockNotes() {
     this.traverseAndLockNotebooks();
     this.traverseAndLockTabs();
   }
@@ -176,8 +148,8 @@ export class LockNotebookService {
     const tabElements = $("ul.layout-tab-bar").children("li[data-type]");
 
     tabElements.each((_index, tabElement) => {
-      const notebookId = $(tabElement).data("initdata")?.notebookId;
-      if (notebookId !== notebookId) return;
+      const comparisonId = $(tabElement).data("initdata")?.notebookId;
+      if (comparisonId !== notebookId) return;
 
       this.createLockOverlay($(tabElement), notebookId, OverlayPosition.Tab);
     });
@@ -185,31 +157,24 @@ export class LockNotebookService {
 
   static createLockOverlay(
     containerElement: Cash,
-    currentNotebookId: string,
+    notebookId: string,
     overlayPosition: OverlayPosition
   ) {
     if (containerElement.hasClass(NotebookLockedClass)) return;
 
-    console.log(
-      "createLockOverlay",
-      containerElement,
-      currentNotebookId,
-      overlayPosition
-    );
-
-    containerElement.addClass(NotebookLockedClass);
-
     new OverlayInterceptor(
-      $(containerElement),
+      containerElement,
       this.i18n,
-      this.lockedNotes,
-      currentNotebookId,
+      notebookId,
       overlayPosition
     );
   }
 
   private static isNotebookLocked(notebookId: string) {
     if (!notebookId) return false;
-    return this.lockedNotes[notebookId] !== undefined;
+
+    const lockedNotes = storageService.getSecuredNotes();
+
+    return lockedNotes[notebookId] !== undefined;
   }
 }

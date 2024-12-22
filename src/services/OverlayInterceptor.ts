@@ -1,4 +1,3 @@
-import UnlockNotebookDialog from "@/components/UnlockNotebookDialog.svelte";
 import $, { Cash } from "cash-dom";
 import {
   addRefIgnore,
@@ -6,10 +5,11 @@ import {
   removeRefIgnore,
   removeSearchIgnore,
 } from "../api/searchIgnore";
-import { Mask } from "@/types/Mask";
+import UnlockNotebookDialog from "@/components/UnlockNotebookDialog.svelte";
+import Mask from "@/components/Mask.svelte";
 import { I18N } from "@/types/i18n";
 import { svelteDialog } from "@/libs/dialog";
-import { isMobile } from "@/utils/isMobile";
+import { storageService } from "./StorageService";
 
 /** @deprecated */
 export type TOverlayPosition =
@@ -25,75 +25,79 @@ export enum OverlayPosition {
 
 export const NotebookLockedClass = "secure-notes--locked";
 
-export class OverlayInterceptor extends Mask {
+export class OverlayInterceptor {
+  private maskComponent: Mask;
+
   constructor(
     containerElement: Cash,
     private i18n: I18N,
-    lockedNoteData: { [key: string]: string },
-    private currentNotebookId: string,
+    private notebookId: string,
     private overlayPosition: OverlayPosition
   ) {
-    super(containerElement);
+    containerElement.addClass(NotebookLockedClass);
 
-    this.overlayPosition = overlayPosition;
+    this.maskComponent = new Mask({
+      target: containerElement.get(0),
+      props: {
+        parentElement: containerElement,
+        overlayPosition,
+        notebookId,
+        onClick: (event: Event) => {
+          event.stopPropagation();
 
-    this.Mask.css({ backdropFilter: "blur(15px)", zIndex: 5 });
-    this.Mask.data("overlayPosition", overlayPosition);
-    this.Mask.data("currentNotebookId", currentNotebookId);
+          const dialog = svelteDialog({
+            title: this.i18n.enterPasswordLabel,
+            constructor: (container: HTMLElement) => {
+              return new UnlockNotebookDialog({
+                target: container,
+                props: {
+                  i18n,
+                  currentPassword: storageService.getPassword(notebookId),
+                  onClose: () => {
+                    dialog.close();
+                  },
+                  onSuccess: () => {
+                    containerElement.removeClass(NotebookLockedClass);
+                    this.removeOverlays();
+                    dialog.close();
 
-    addRefIgnore(currentNotebookId);
-    addSearchIgnore(currentNotebookId);
-
-    this.Mask.on("click", (event) => {
-      event.stopPropagation();
-
-      const dialog = svelteDialog({
-        title: this.i18n.enterPasswordLabel,
-        width: isMobile() ? "92vw" : "720px",
-        constructor: (container: HTMLElement) => {
-          return new UnlockNotebookDialog({
-            target: container,
-            props: {
-              i18n,
-              currentPassword: lockedNoteData[currentNotebookId],
-              onClose: () => {
-                dialog.close();
-              },
-              onSuccess: () => {
-                this.parentElement.removeClass(NotebookLockedClass);
-                this.destroy();
-                dialog.close();
-
-                removeRefIgnore(currentNotebookId);
-                removeSearchIgnore(currentNotebookId);
-              },
+                    removeRefIgnore(notebookId);
+                    removeSearchIgnore(notebookId);
+                  },
+                },
+              });
             },
           });
         },
-      });
+      },
     });
+
+    this.overlayPosition = overlayPosition;
+
+    addRefIgnore(notebookId);
+    addSearchIgnore(notebookId);
   }
 
-  destroy(): void {
+  removeOverlays(): void {
     const overlayPosition = this.overlayPosition;
 
     switch (overlayPosition) {
       case OverlayPosition.Directory:
-        $("[data-current-notebook-id]").each((_, e) => {
-          $(e).data("currentNotebookId") === this.currentNotebookId &&
-            $(e).remove();
+        $("[data-notebook-id]").each((_, e) => {
+          const match = $(e).data("notebookId") === this.notebookId;
+          if (match) $(e).remove();
         });
         break;
       case OverlayPosition.Tab:
-        $("[data-current-notebook-id]").each((_, e) => {
-          $(e).data("currentNotebookId") === this.currentNotebookId &&
+        $("[data-notebook-id]").each((_, e) => {
+          $(e).data("notebookId") === this.notebookId &&
             $(e).data("overlayPosition") !== OverlayPosition.Directory &&
             $(e).remove();
         });
         break;
       case OverlayPosition.Content:
-        $("[data-current-notebook-id]").each((_, e) => {
-          $(e).data("currentNotebookId") === this.currentNotebookId &&
+        $("[data-notebook-id]").each((_, e) => {
+          $(e).data("notebookId") === this.notebookId &&
             $(e).data("overlayPosition") !== OverlayPosition.Directory &&
             $(e).remove();
         });
