@@ -42,7 +42,7 @@ export class LockNotebookService {
         likeQuery(currentEditorPrimaryNote.data("nodeId")).then(({ data }) => {
           const dataId = data[0].box;
 
-          if (this.isNotebookLocked(dataId)) {
+          if (storageService.isNotebookSecured(dataId)) {
             this.createLockOverlay(
               $(currentActiveEditorSelector),
               dataId,
@@ -65,6 +65,7 @@ export class LockNotebookService {
   }
 
   private static traverseAndLockNotebooks() {
+    console.log("traverseAndLockNotebooks");
     const notebookElements = $("ul.b3-list[data-url]");
     const closedNotebooks = $(
       "li.b3-list-item.b3-list-item--hide-action[data-type='open']"
@@ -83,7 +84,7 @@ export class LockNotebookService {
       //   this.lockNotebook($(note), dataId);
       // });
 
-      if (!this.isNotebookLocked(dataId)) return;
+      if (!storageService.isNotebookSecured(dataId)) return;
 
       this.createLockOverlay($(notebook), dataId, OverlayPosition.Directory);
     });
@@ -135,7 +136,7 @@ export class LockNotebookService {
       });
 
       tabEntries.forEach((tabItem) => {
-        if (this.isNotebookLocked(tabItem.id)) {
+        if (storageService.isNotebookSecured(tabItem.id)) {
           const { tabElement, id, overlayPosition } = tabItem;
           this.createLockOverlay(tabElement, id, overlayPosition);
         }
@@ -161,7 +162,12 @@ export class LockNotebookService {
     overlayPosition: OverlayPosition
   ) {
     if (containerElement.hasClass(NotebookLockedClass)) return;
-
+    console.log(
+      "createLockOverlay",
+      containerElement,
+      notebookId,
+      overlayPosition
+    );
     new OverlayInterceptor(
       containerElement,
       this.i18n,
@@ -170,11 +176,11 @@ export class LockNotebookService {
     );
   }
 
-  private static isNotebookLocked(notebookId: string) {
-    if (!notebookId) return false;
+  // private static isNotebookLocked(notebookId: string) {
+  //   if (!notebookId) return false;
 
-    const lockedNotes = storageService.getSecuredNotes();
+  //   const lockedNotes = storageService.getSecuredNotes();
 
-    return lockedNotes[notebookId] !== undefined;
-  }
+  //   return lockedNotes[notebookId] !== undefined;
+  // }
 }

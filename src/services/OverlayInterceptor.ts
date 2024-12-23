@@ -52,13 +52,13 @@ export class OverlayInterceptor {
                 target: container,
                 props: {
                   i18n,
-                  currentPassword: storageService.getPassword(notebookId),
+                  notebookId: notebookId,
                   onClose: () => {
                     dialog.close();
                   },
                   onSuccess: () => {
-                    containerElement.removeClass(NotebookLockedClass);
                     this.removeOverlays();
+                    containerElement.removeClass(NotebookLockedClass);
                     dialog.close();
 
                     removeRefIgnore(notebookId);
@@ -83,6 +83,7 @@ export class OverlayInterceptor {
 
     switch (overlayPosition) {
       case OverlayPosition.Directory:
+        this.maskComponent.$destroy();
         $("[data-notebook-id]").each((_, e) => {
           const match = $(e).data("notebookId") === this.notebookId;
           if (match) $(e).remove();

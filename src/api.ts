@@ -361,9 +361,12 @@ export async function getFile(path: string): Promise<any> {
     path: path,
   };
   let url = "/api/file/getFile";
-  return new Promise((resolve, _) => {
+  return new Promise((resolve, reject) => {
     fetchPost(url, data, (content: any) => {
-      resolve(content);
+      if (content.code !== 404) {
+        return resolve(content);
+      }
+      return reject(content);
     });
   });
 }

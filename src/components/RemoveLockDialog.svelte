@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { storageService } from "@/services/StorageService";
   import { type I18N } from "@/types/i18n";
 
   export let i18n: I18N;
-  export let currentPassword: string;
+  export let notebookId: string;
   export let onSuccess: () => void;
   export let onClose: () => void;
 
@@ -10,8 +11,13 @@
   let validation = "";
   let disabled = true;
 
-  $: submitForm = () => {
-    if (currentPassword === confirmPassword) {
+  $: submitForm = async () => {
+    const passwordCorrect = await storageService.verifyPassword(
+      notebookId,
+      confirmPassword
+    );
+
+    if (passwordCorrect) {
       onSuccess();
     } else {
       validation = i18n.passwordWrong;

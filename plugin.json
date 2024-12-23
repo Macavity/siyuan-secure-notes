@@ -2,7 +2,7 @@
   "name": "siyuan-secure-notes",
   "author": "Macavity",
   "url": "https://github.com/Macavity/siyuan-secure-notes",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "minAppVersion": "3.0.12",
   "backends": [
     "windows",
@@ -20,11 +20,11 @@
     "desktop-window"
   ],
   "displayName": {
-    "en_US": "Secure Notes with encryption",
-    "zh_CN": "Secure Notes with encryption"
+    "en_US": "Secure Notes with password",
+    "zh_CN": "Secure Notes with password"
   },
   "description": {
-    "en_US": "This plugin allows to secure entire notes in SiYuan with encryption. This will also hide the notes from search results."
+    "en_US": "This plugin allows to secure entire notes in SiYuan with a password. This will also hide the notes from search results."
   },
   "readme": {
     "en_US": "README.md"
@@ -37,7 +37,6 @@
   "keywords": [
     "plugin",
     "secure",
-    "encryption",
     "search",
     "hide",
     "access",

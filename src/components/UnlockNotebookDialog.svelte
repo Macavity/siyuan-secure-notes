@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { Logger } from "@/libs/logger";
+  import { storageService } from "@/services/StorageService";
   import { type I18N } from "@/types/i18n";
 
   export let i18n: I18N;
-  export let currentPassword: string;
+  export let notebookId: string;
   export let onSuccess: () => void;
   export let onClose: () => void;
 
@@ -11,11 +13,16 @@
   let disabled = true;
 
   $: submitForm = () => {
-    if (currentPassword === confirmPassword) {
-      onSuccess();
-    } else {
-      validation = i18n.passwordWrong;
+    if (!notebookId) {
+      Logger.error("Notebook ID is not provided");
     }
+    storageService.verifyPassword(notebookId, confirmPassword).then((res) => {
+      if (res) {
+        onSuccess();
+      } else {
+        validation = i18n.passwordWrong;
+      }
+    });
   };
 
   $: onKeyDown = (e: KeyboardEvent) => {

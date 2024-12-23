@@ -3,44 +3,37 @@ import {
   Plugin,
   Menu,
   IModel,
-  openWindow,
   App,
   EventMenu,
   IMenuItemOption,
   IEventBusMap,
 } from "siyuan";
 import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
-import UnlockNotebookDialog from "@/components/RemoveLockDialog.svelte";
 import {
   GLOBAL_LOCK_STATE,
   SECURED_NOTES_STORAGE,
-  StorageService,
   storageService,
 } from "./services/StorageService";
 import { I18N } from "./types/i18n";
 import { SettingUtils } from "./libs/setting-utils";
 import { Logger } from "./libs/logger";
-import { SecuredNotesStorage } from "./types/SecuredNotesStorage";
-import { LockState } from "./types/LockState";
 import { LockNotebookService } from "./services/LockNotebookService";
 import { SiyuanEvents } from "./types/SiyuanEvents";
 import { isMobile } from "./utils/isMobile";
 import { OverlayPosition } from "./services/OverlayInterceptor";
 import { svelteDialog } from "./libs/dialog";
-import "@/index.scss";
 import { removeRefIgnore, removeSearchIgnore } from "./api/searchIgnore";
 import { sleep } from "./utils/sleep";
+import RemoveLockDialog from "./components/RemoveLockDialog.svelte";
+import "@/index.scss";
 
 export default class SecureNotesPlugin extends Plugin {
   customTab: () => IModel;
   private isMobile: boolean;
   private settingUtils: SettingUtils;
-  private storageService: StorageService;
 
   constructor(options: { app: App; name: string; i18n: I18N }) {
     super(options);
-
-    this.storageService = storageService;
   }
 
   get I18N(): I18N {
@@ -110,7 +103,7 @@ export default class SecureNotesPlugin extends Plugin {
     const dataId = $element.parent().data("url") || $element.data("nodeId");
     Logger.debug("OPEN_MENU_DOCTREE dataId", dataId);
 
-    if (this.isNotebookLocked(dataId)) {
+    if (storageService.isNotebookSecured(dataId)) {
       this.handleLockedNotebookMenu($element, dataId, detail);
       return;
     }
@@ -150,11 +143,11 @@ export default class SecureNotesPlugin extends Plugin {
           title: this.I18N.removeLock,
           width: this.isMobile ? "92vw" : "720px",
           constructor: (container: HTMLElement) => {
-            return new UnlockNotebookDialog({
+            return new RemoveLockDialog({
               target: container,
               props: {
                 i18n: this.I18N,
-                currentPassword: storageService.getPassword(dataId),
+                notebookId: dataId,
                 onClose: () => {
                   dialog.close();
                 },
@@ -195,8 +188,7 @@ export default class SecureNotesPlugin extends Plugin {
                   dialog.close();
                 },
                 onSave: (password: string) => {
-                  Logger.debug(`Lock note ${dataId} with password`);
-
+                  storageService.secureNotebook(dataId, password);
                   dialog.close();
                 },
               },
@@ -210,11 +202,13 @@ export default class SecureNotesPlugin extends Plugin {
   }
 
   uninstall(): void {
+    // TODO Add setting to remove data
     this.removeData(SECURED_NOTES_STORAGE);
     this.removeData(GLOBAL_LOCK_STATE);
   }
 
   initStorage() {
+    storageService.initSalt();
     storageService.fetchSecuredNotes();
   }
 
@@ -228,7 +222,7 @@ export default class SecureNotesPlugin extends Plugin {
           this.addMenu();
         } else {
           let rect = topBarElement.getBoundingClientRect();
-          // 如果被隐藏，则使用更多按钮
+          // If hidden, use the More button
           if (rect.width === 0) {
             rect = document.querySelector("#barMore").getBoundingClientRect();
           }
@@ -248,132 +242,6 @@ export default class SecureNotesPlugin extends Plugin {
       plugin: this,
     });
 
-    // this.settingUtils.addItem({
-    //   key: "Input",
-    //   value: "",
-    //   type: "textinput",
-    //   title: "Readonly text",
-    //   description: "Input description",
-    //   action: {
-    //     // Called when focus is lost and content changes
-    //     callback: () => {
-    //       // Return data and save it in real time
-    //       let value = this.settingUtils.takeAndSave("Input");
-    //       console.log(value);
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "InputArea",
-    //   value: "",
-    //   type: "textarea",
-    //   title: "Readonly text",
-    //   description: "Input description",
-    //   // Called when focus is lost and content changes
-    //   action: {
-    //     callback: () => {
-    //       // Read data in real time
-    //       let value = this.settingUtils.take("InputArea");
-    //       console.log(value);
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Check",
-    //   value: true,
-    //   type: "checkbox",
-    //   title: "Checkbox text",
-    //   description: "Check description",
-    //   action: {
-    //     callback: () => {
-    //       // Return data and save it in real time
-    //       let value = !this.settingUtils.get("Check");
-    //       this.settingUtils.set("Check", value);
-    //       console.log(value);
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Select",
-    //   value: 1,
-    //   type: "select",
-    //   title: "Select",
-    //   description: "Select description",
-    //   options: {
-    //     1: "Option 1",
-    //     2: "Option 2",
-    //   },
-    //   action: {
-    //     callback: () => {
-    //       // Read data in real time
-    //       let value = this.settingUtils.take("Select");
-    //       console.log(value);
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Slider",
-    //   value: 50,
-    //   type: "slider",
-    //   title: "Slider text",
-    //   description: "Slider description",
-    //   direction: "column",
-    //   slider: {
-    //     min: 0,
-    //     max: 100,
-    //     step: 1,
-    //   },
-    //   action: {
-    //     callback: () => {
-    //       // Read data in real time
-    //       let value = this.settingUtils.take("Slider");
-    //       console.log(value);
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Btn",
-    //   value: "",
-    //   type: "button",
-    //   title: "Button",
-    //   description: "Button description",
-    //   button: {
-    //     label: "Button",
-    //     callback: () => {
-    //       showMessage("Button clicked");
-    //     },
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Custom Element",
-    //   value: "",
-    //   type: "custom",
-    //   direction: "row",
-    //   title: "Custom Element",
-    //   description: "Custom Element description",
-    //   //Any custom element must offer the following methods
-    //   createElement: (currentVal: any) => {
-    //     let div = document.createElement("div");
-    //     div.style.border = "1px solid var(--b3-theme-primary)";
-    //     div.contentEditable = "true";
-    //     div.textContent = currentVal;
-    //     return div;
-    //   },
-    //   getEleVal: (ele: HTMLElement) => {
-    //     return ele.textContent;
-    //   },
-    //   setEleVal: (ele: HTMLElement, val: any) => {
-    //     ele.textContent = val;
-    //   },
-    // });
-    // this.settingUtils.addItem({
-    //   key: "Hint",
-    //   value: "",
-    //   type: "hint",
-    //   title: this.i18n.hintTitle,
-    //   description: this.i18n.hintDesc,
-    // });
-
     try {
       this.settingUtils.load();
     } catch (error) {
@@ -384,7 +252,9 @@ export default class SecureNotesPlugin extends Plugin {
     }
   }
 
+  // TODO Global lock state
   private addMenu(rect?: DOMRect) {
+    return;
     const menu = new Menu("secureNotesTopBarMenu");
 
     if (!this.isMobile) {
@@ -392,9 +262,7 @@ export default class SecureNotesPlugin extends Plugin {
         icon: "iconUnlock",
         label: this.I18N.unlock,
         click: () => {
-          openWindow({
-            doc: { id: "20200812220555-lj3enxa" },
-          });
+          // TODO
         },
       });
     }
@@ -417,15 +285,5 @@ export default class SecureNotesPlugin extends Plugin {
         isLeft: true,
       });
     }
-  }
-
-  private isNotebookLocked(notebookId: string) {
-    if (!notebookId) return false;
-    Logger.debug(
-      "isNotebookLocked",
-      notebookId,
-      this.data[SECURED_NOTES_STORAGE]
-    );
-    return this.data[SECURED_NOTES_STORAGE][notebookId] !== undefined;
   }
 }
