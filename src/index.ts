@@ -7,8 +7,8 @@ import {
   EventMenu,
   IMenuItemOption,
   IEventBusMap,
+  showMessage,
 } from "siyuan";
-import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
 import {
   GLOBAL_LOCK_STATE,
   SECURED_NOTES_STORAGE,
@@ -24,8 +24,13 @@ import { OverlayPosition } from "./services/OverlayInterceptor";
 import { svelteDialog } from "./libs/dialog";
 import { removeRefIgnore, removeSearchIgnore } from "./api/searchIgnore";
 import { sleep } from "./utils/sleep";
-import RemoveLockDialog from "./components/RemoveLockDialog.svelte";
+import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
+import RemoveLockDialog from "@/components/RemoveLockDialog.svelte";
+import UnlockAllNotebooksDialog from "@/components/UnlockAllNotebooksDialog.svelte";
 import "@/index.scss";
+import { Setting } from "./types/Setting";
+import { LockState } from "./types/LockState";
+import { hashPassword } from "./utils/crypto";
 
 export default class SecureNotesPlugin extends Plugin {
   customTab: () => IModel;
@@ -66,10 +71,7 @@ export default class SecureNotesPlugin extends Plugin {
     this.settingUtils.load();
     LockNotebookService.onLayoutReady();
 
-    this.eventBus.on(
-      SiyuanEvents.OPEN_MENU_DOCTREE,
-      this.onOpenMenuDocTree.bind(this)
-    );
+    this.eventBus.on(SiyuanEvents.OPEN_MENU_DOCTREE, this.onOpenMenuDocTree.bind(this));
 
     this.eventBus.on(SiyuanEvents.OPEN_MENU_CONTENT, (event) =>
       LockNotebookService.showContentMenu(event)
@@ -125,11 +127,7 @@ export default class SecureNotesPlugin extends Plugin {
       iconHTML: "",
       label: this.i18n.secureNotes,
       click: () => {
-        LockNotebookService.createLockOverlay(
-          $element.parent(),
-          dataId,
-          OverlayPosition.Directory
-        );
+        LockNotebookService.createLockOverlay($element.parent(), dataId, OverlayPosition.Directory);
         LockNotebookService.lockNotebookTabs(dataId);
       },
     });
@@ -217,6 +215,7 @@ export default class SecureNotesPlugin extends Plugin {
       icon: "iconLock",
       title: this.I18N.topBarIconTooltip,
       position: "right",
+
       callback: () => {
         if (this.isMobile) {
           this.addMenu();
@@ -227,9 +226,7 @@ export default class SecureNotesPlugin extends Plugin {
             rect = document.querySelector("#barMore").getBoundingClientRect();
           }
           if (rect.width === 0) {
-            rect = document
-              .querySelector("#barPlugins")
-              .getBoundingClientRect();
+            rect = document.querySelector("#barPlugins").getBoundingClientRect();
           }
           this.addMenu(rect);
         }
@@ -240,32 +237,142 @@ export default class SecureNotesPlugin extends Plugin {
   initSettings() {
     this.settingUtils = new SettingUtils({
       plugin: this,
+      callback: () => {
+        this.settingUtils.getElement(Setting.MasterPassword).disabled =
+          this.settingUtils.get(Setting.MasterPassword) !== "";
+      },
     });
 
+    // Master Password Input
+    const hasMasterPassword = this.settingUtils.get(Setting.MasterPassword) !== "";
+
+    this.settingUtils.addItem({
+      key: Setting.MasterPassword,
+      value: "",
+      type: "password",
+      title: this.i18n.masterPasswordLabel,
+      description: hasMasterPassword
+        ? this.I18N.masterPasswordReadonly
+        : this.i18n.masterPasswordDescription,
+      disabled: hasMasterPassword,
+      action: {
+        callback: async () => {
+          hashPassword(
+            this.settingUtils.get(Setting.MasterPassword),
+            storageService.getSalt()
+          ).then((hash) => {
+            // console.log("hashed master password:", hash);
+            this.settingUtils.set(Setting.MasterPassword, hash);
+          });
+        },
+      },
+    });
+
+    if (hasMasterPassword) {
+      this.settingUtils.addItem({
+        key: "resetMasterPassword",
+        value: "",
+        type: "button",
+        title: this.I18N.masterPasswordResetLabel,
+        description: this.I18N.masterPasswordResetDescription,
+        button: {
+          label: this.I18N.masterPasswordResetButton,
+          callback: () => {
+            this.settingUtils.set(Setting.MasterPassword, "");
+            this.settingUtils.getElement(Setting.MasterPassword).disabled = false;
+          },
+        },
+      });
+    }
+
+    // Remove Data on Uninstall Checkbox
+    this.settingUtils.addItem({
+      key: Setting.CleanData,
+      value: false,
+      type: "checkbox",
+      title: this.i18n.removeDataOnUninstallLabel,
+      description: this.i18n.removeDataOnUninstallDescription,
+      action: {
+        callback: () => {
+          const value = !this.settingUtils.get(Setting.CleanData);
+          this.settingUtils.set(Setting.CleanData, value);
+        },
+      },
+    });
+
+    // Security Mode Dropdown
+    this.settingUtils.addItem({
+      key: Setting.SecurityMode,
+      value: "blur",
+      type: "select",
+      title: this.i18n.securityModeLabel,
+      description: this.i18n.securityModeDescription,
+      options: {
+        blur: this.i18n.securityModeBlur,
+        hide: this.i18n.securityModeHide,
+      },
+      action: {
+        callback: () => {
+          this.settingUtils.takeAndSave(Setting.SecurityMode);
+          // Logger.debug("Security mode updated:", value);
+        },
+      },
+    });
+
+    // this.settingUtils.addItem({
+    //   key: "Hint",
+    //   value: "",
+    //   type: "hint",
+    //   title: this.i18n.hintTitle,
+    //   description: this.i18n.hintDesc,
+    // });
+
     try {
-      this.settingUtils.load();
+      this.settingUtils.load().then(() => {
+        storageService.setMasterPasswordHash(this.settingUtils.get(Setting.MasterPassword));
+      });
     } catch (error) {
-      console.error(
-        "Error loading settings storage, probably empty config json:",
-        error
-      );
+      console.error("Error loading settings storage, probably empty config json:", error);
     }
   }
 
   // TODO Global lock state
   private addMenu(rect?: DOMRect) {
-    return;
     const menu = new Menu("secureNotesTopBarMenu");
 
-    if (!this.isMobile) {
-      menu.addItem({
-        icon: "iconUnlock",
-        label: this.I18N.unlock,
-        click: () => {
-          // TODO
-        },
-      });
+    if (this.isMobile) {
+      return;
     }
+
+    menu.addItem({
+      icon: "iconUnlock",
+      label: this.I18N.unlockAllNotes,
+      click: () => {
+        const dialog = svelteDialog({
+          title: this.I18N.unlockAllNotes,
+          width: this.isMobile ? "92vw" : "720px",
+          constructor: (container: HTMLElement) => {
+            return new UnlockAllNotebooksDialog({
+              target: container,
+              props: {
+                i18n: this.I18N,
+                masterPasswordHash: this.settingUtils.get(Setting.MasterPassword),
+                onClose: () => {
+                  Logger.debug("UnlockAllNotebooksDialog onClose");
+                  dialog.close();
+                },
+                onSuccess: () => {
+                  Logger.debug("UnlockAllNotebooksDialog onSuccess");
+                  storageService.setLockState(LockState.UNLOCKED);
+                  LockNotebookService.unlockAll();
+                  dialog.close();
+                },
+              },
+            });
+          },
+        });
+      },
+    });
 
     menu.addSeparator();
     menu.addItem({
@@ -276,14 +383,14 @@ export default class SecureNotesPlugin extends Plugin {
       },
     });
 
-    if (this.isMobile) {
-      menu.fullscreen();
-    } else {
-      menu.open({
-        x: rect.right,
-        y: rect.bottom,
-        isLeft: true,
-      });
-    }
+    // if (this.isMobile) {
+    //   menu.fullscreen();
+    // } else {
+    menu.open({
+      x: rect.right,
+      y: rect.bottom,
+      isLeft: true,
+    });
+    // }
   }
 }

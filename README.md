@@ -9,10 +9,14 @@ The functionality is inspired by the plugin [SiYuan Access Controller](https://g
 
 ## Features
 
+- Set a master password which unlocks and shows all notes
 - Protect Notebooks with a password
 - Provide a setting which allows if you want to hide or blur the protected notebooks
-- Provide a setting if uninstalling the plugin should remove the stored passwords
 - Passwords are encrypted
+
+## Planned Features
+
+- [] Provide a setting if uninstalling the plugin should remove the stored passwords
 
 ## Data Security Statement
 

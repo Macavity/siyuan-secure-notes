@@ -144,6 +144,18 @@ export class LockNotebookService {
     });
   }
 
+  static unlockAll() {
+    Logger.debug("unlockAll");
+    const lockedContainers = document.querySelectorAll(
+      `.${NotebookLockedClass}`
+    );
+    lockedContainers.forEach((container) => {
+      container.classList.remove(NotebookLockedClass);
+    });
+    const overlays = document.querySelectorAll(".secure-notes-mask");
+    overlays.forEach((overlay) => overlay.remove());
+  }
+
   // Does not lock the currently open document
   static lockNotebookTabs(notebookId: string) {
     const tabElements = $("ul.layout-tab-bar").children("li[data-type]");
@@ -162,12 +174,12 @@ export class LockNotebookService {
     overlayPosition: OverlayPosition
   ) {
     if (containerElement.hasClass(NotebookLockedClass)) return;
-    console.log(
-      "createLockOverlay",
-      containerElement,
-      notebookId,
-      overlayPosition
-    );
+    // Logger.debug(
+    //   "createLockOverlay",
+    //   containerElement,
+    //   notebookId,
+    //   overlayPosition
+    // );
     new OverlayInterceptor(
       containerElement,
       this.i18n,

@@ -29,6 +29,7 @@
 </script>
 
 <div
+  class="secure-notes-mask"
   bind:this={maskElement}
   role="none"
   on:click={handleClick}

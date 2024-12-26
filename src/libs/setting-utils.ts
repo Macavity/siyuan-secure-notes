@@ -24,6 +24,7 @@ const createDefaultGetter = (type: TSettingItemType) => {
       break;
     case "select":
     case "slider":
+    case "password":
     case "textinput":
     case "textarea":
       getter = (
@@ -59,6 +60,7 @@ const createDefaultSetter = (type: TSettingItemType) => {
       break;
     case "select":
     case "slider":
+    case "password":
     case "textinput":
     case "textarea":
     case "number":
@@ -338,6 +340,21 @@ export class SettingUtils {
           item.action?.callback();
         };
         itemElement = sliderElement;
+        break;
+      case "password":
+        console.log("createDefaultElement");
+        let passwordInputElement: HTMLInputElement =
+          document.createElement("input");
+        passwordInputElement.type = "password";
+        passwordInputElement.className =
+          "b3-text-field fn__flex-center fn__size200";
+        passwordInputElement.value = item.value;
+        if(item.disabled){
+          passwordInputElement.disabled = true;
+        }
+        passwordInputElement.onchange = item.action?.callback ?? (() => {});
+        itemElement = passwordInputElement;
+        passwordInputElement.addEventListener("keydown", preventEnterConfirm);
         break;
       case "textinput":
         let textInputElement: HTMLInputElement =
