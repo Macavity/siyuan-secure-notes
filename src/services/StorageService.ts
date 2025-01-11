@@ -178,6 +178,12 @@ export class StorageService {
     return this.saveSecuredNotes(this.securedNotes);
   }
 
+  public async secureNotebookWithMasterPassword(notebookId: string){
+    this.securedNotes[notebookId] = this.masterPasswordHash;
+
+    return this.saveSecuredNotes(this.securedNotes);
+  }
+
   public removeLock(notebookId: string) {
     delete this.securedNotes[notebookId];
 

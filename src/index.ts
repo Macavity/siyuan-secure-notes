@@ -7,7 +7,6 @@ import {
   EventMenu,
   IMenuItemOption,
   IEventBusMap,
-  showMessage,
 } from "siyuan";
 import {
   GLOBAL_LOCK_STATE,
@@ -24,13 +23,13 @@ import { OverlayPosition } from "./services/OverlayInterceptor";
 import { svelteDialog } from "./libs/dialog";
 import { removeRefIgnore, removeSearchIgnore } from "./api/searchIgnore";
 import { sleep } from "./utils/sleep";
-import SetPasswordFormDialog from "@/components/SetPasswordFormDialog.svelte";
 import RemoveLockDialog from "@/components/RemoveLockDialog.svelte";
 import UnlockAllNotebooksDialog from "@/components/UnlockAllNotebooksDialog.svelte";
 import "@/index.scss";
 import { Setting } from "./types/Setting";
 import { LockState } from "./types/LockState";
 import { hashPassword } from "./utils/crypto";
+import LockWithMasterPassword from "@/components/LockWithMasterPassword.svelte";
 
 export default class SecureNotesPlugin extends Plugin {
   customTab: () => IModel;
@@ -113,6 +112,10 @@ export default class SecureNotesPlugin extends Plugin {
     this.addNotebookUnlockedContextMenu(dataId, event);
   }
 
+  refreshLockState(){
+
+  }
+
   handleLockedNotebookMenu(
     $element: Cash,
     dataId: string,
@@ -171,23 +174,46 @@ export default class SecureNotesPlugin extends Plugin {
     event: CustomEvent<IEventBusMap["open-menu-doctree"]>
   ) {
     const setPasswordMenuItem: IMenuItemOption = {
-      iconHTML: "",
       label: this.i18n.setPasswordMenuItem,
+      icon: "iconLock",
       click: () => {
+        // const dialog = svelteDialog({
+        //   title: this.I18N.setPasswordMenuItem,
+        //   width: this.isMobile ? "92vw" : "720px",
+        //   constructor: (container: HTMLElement) => {
+        //     return new SetPasswordFormDialog({
+        //       target: container,
+        //       props: {
+        //         i18n: this.I18N,
+        //         onClose: () => {
+        //           dialog.close();
+        //         },
+        //         onSave: (password: string) => {
+        //           storageService.secureNotebook(dataId, password);
+        //           dialog.close();
+        //         },
+        //       },
+        //     });
+        //   },
+        // });
         const dialog = svelteDialog({
           title: this.I18N.setPasswordMenuItem,
           width: this.isMobile ? "92vw" : "720px",
           constructor: (container: HTMLElement) => {
-            return new SetPasswordFormDialog({
+            const masterPassword = this.settingUtils.get(Setting.MasterPassword);
+
+            return new LockWithMasterPassword({
               target: container,
               props: {
                 i18n: this.I18N,
+                hasMasterPassword: masterPassword && (masterPassword !== ""),
                 onClose: () => {
                   dialog.close();
                 },
-                onSave: (password: string) => {
-                  storageService.secureNotebook(dataId, password);
+                onSave: async () => {
+                  await storageService.secureNotebookWithMasterPassword(dataId);
                   dialog.close();
+
                 },
               },
             });
@@ -244,7 +270,8 @@ export default class SecureNotesPlugin extends Plugin {
     });
 
     // Master Password Input
-    const hasMasterPassword = this.settingUtils.get(Setting.MasterPassword) !== "";
+    const masterPasswordSetting = this.settingUtils.get(Setting.MasterPassword);
+    const hasMasterPassword = masterPasswordSetting !== undefined && masterPasswordSetting !== "";
 
     this.settingUtils.addItem({
       key: Setting.MasterPassword,
@@ -268,7 +295,6 @@ export default class SecureNotesPlugin extends Plugin {
       },
     });
 
-    if (hasMasterPassword) {
       this.settingUtils.addItem({
         key: "resetMasterPassword",
         value: "",
@@ -283,9 +309,8 @@ export default class SecureNotesPlugin extends Plugin {
           },
         },
       });
-    }
 
-    // Remove Data on Uninstall Checkbox
+    // Remove Data on uninstallation Checkbox
     this.settingUtils.addItem({
       key: Setting.CleanData,
       value: false,
